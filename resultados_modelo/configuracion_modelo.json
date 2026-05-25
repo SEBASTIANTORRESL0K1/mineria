@@ -1,0 +1,28 @@
+{
+  "hiperparametros": {
+    "metodo": "PPMI + SVD",
+    "ventana_contexto": 3,
+    "dimensiones_svd": 50,
+    "frecuencia_minima": 1,
+    "archivo_stopwords": "stopwords-es.txt",
+    "total_stopwords_cargadas": 655
+  },
+  "estadisticas": {
+    "total_tokens": 953,
+    "tamano_vocabulario": 469,
+    "total_parejas": 5706,
+    "forma_embeddings": [
+      469,
+      50
+    ]
+  },
+  "archivos_generados": [
+    "tokens_finales.csv",
+    "vocabulario.csv",
+    "parejas_ventana.csv",
+    "one_hot_muestra.csv",
+    "embeddings.csv",
+    "embeddings.npy",
+    "configuracion_modelo.json"
+  ]
+}
