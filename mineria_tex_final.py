@@ -54,7 +54,11 @@ def mostrar_resumen():
     print("  HIPERPARÁMETROS:")
     print(f"    Método              : {h['metodo']}")
     print(f"    Ventana de contexto : {h['ventana_contexto']}  palabras a cada lado")
-    print(f"    Dimensiones SVD     : {h['dimensiones_svd']}")
+    print(f"    Dimensiones Vector  : {h['dimensiones_svd']}")
+    if "learning_rate" in h:
+        print(f"    Tasa de aprendizaje : {h['learning_rate']}")
+    if "epochs" in h:
+        print(f"    Épocas de entrena.  : {h['epochs']}")
     print(f"    Frecuencia mínima   : {h['frecuencia_minima']}")
     if "archivo_stopwords" in h:
         print(f"    Stopwords usadas    : {h['archivo_stopwords']}")
@@ -105,7 +109,7 @@ def procesar_y_entrenar():
     matriz = embeddings_model.crear_matriz_coocurrencia(tokens, vocabulario, ventana_actual)
 
     utils.titulo("EMBEDDINGS")
-    embeddings = embeddings_model.generar_embeddings(matriz, ventana_actual)
+    embeddings = embeddings_model.generar_embeddings(vocabulario, parejas, ventana_actual)
 
     utils.titulo("GUARDAR RESULTADOS EN DISCO")
     embeddings_model.guardar_resultados(tokens, vocabulario, parejas, muestra_oh, embeddings, ventana_actual)

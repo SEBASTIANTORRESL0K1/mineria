@@ -98,7 +98,7 @@ def crear_matriz_coocurrencia(tokens, vocabulario, ventana):
     return matriz
 
 def calcular_ppmi(matriz):
-    """Calcula la matriz PPMI a partir de la matriz de coocurrencia."""
+    """Calcula la matriz PPMI a partir de la matriz de coocurrencia (mantenida por retrocompatibilidad)."""
     total = matriz.sum()
     if total == 0:
         return matriz
@@ -111,25 +111,81 @@ def calcular_ppmi(matriz):
     ppmi = np.maximum(pmi, 0)
     return ppmi
 
-def generar_embeddings(matriz_cooc, ventana):
-    """Aplica PPMI y reducción SVD para producir embeddings densos de baja dimensión."""
+def softmax(z):
+    """Calcula la función softmax de manera numéricamente estable."""
+    exp_z = np.exp(z - np.max(z))
+    return exp_z / np.sum(exp_z)
+
+def generar_embeddings(vocabulario, parejas, ventana):
+    """Aplica el algoritmo Skip-Gram (Red Neuronal en NumPy desde cero) para entrenar embeddings."""
+    V = len(vocabulario)
+    d = config.DIMENSIONES
+    epochs = config.EPOCHS
+    lr = config.LEARNING_RATE
+
     print("")
-    print("  Método usado: PPMI + SVD")
+    print("  Método usado: Skip-Gram (Red Neuronal en NumPy desde cero)")
     print("  Parámetros del Modelo:")
     print(f"    Ventana de contexto  : {ventana}")
-    print(f"    Dimensiones SVD      : {config.DIMENSIONES}")
-    print(f"    Frecuencia mínima    : {config.MIN_FRECUENCIA}")
+    print(f"    Dimensiones vector   : {d}")
+    print(f"    Tasa de aprendizaje  : {lr}")
+    print(f"    Épocas (Epochs)      : {epochs}")
+    print(f"    Vocabulario (V)      : {V} palabras")
+    print(f"    Total de parejas     : {len(parejas)}")
 
-    ppmi = calcular_ppmi(matriz_cooc)
+    # Inicializar pesos de forma aleatoria uniforme pequeña
+    np.random.seed(42)  # Fija la semilla para obtener resultados reproducibles
+    W_in = np.random.uniform(-0.5 / d, 0.5 / d, (V, d)).astype(np.float32)
+    W_out = np.random.uniform(-0.5 / d, 0.5 / d, (d, V)).astype(np.float32)
 
-    # Limitar la dimensión real si el vocabulario es más pequeño que las dimensiones estimadas
-    dim_real = min(config.DIMENSIONES, ppmi.shape[0] - 1)
+    # Convertir parejas de palabras a parejas de índices para acelerar el bucle de entrenamiento
+    parejas_idx = []
+    for obj, ctx in parejas:
+        if obj in vocabulario and ctx in vocabulario:
+            parejas_idx.append((vocabulario[obj]["indice"], vocabulario[ctx]["indice"]))
+
     print("")
-    print("  Calculando Descomposición SVD...")
-    U, S, Vt = np.linalg.svd(ppmi, full_matrices=False)
-    embeddings = U[:, :dim_real] * S[:dim_real]
+    print("  Entrenando Skip-Gram mediante Gradiente Descendiente Estocástico (SGD)...")
 
-    print(f"  Embeddings generados   : {embeddings.shape[0]} palabras x {embeddings.shape[1]} dimensiones")
+    # Bucle de entrenamiento principal
+    for epoch in range(1, epochs + 1):
+        loss_acumulada = 0.0
+        # Mezclar las parejas en cada época para un entrenamiento estocástico real
+        np.random.shuffle(parejas_idx)
+
+        for idx_obj, idx_ctx in parejas_idx:
+            # 1. Forward Pass (Capa Oculta)
+            h = W_in[idx_obj]  # Vector oculto de tamaño d
+            z = np.dot(h, W_out)  # Logits de salida de tamaño V
+            y_pred = softmax(z)   # Distribución de probabilidad de tamaño V
+
+            # 2. Calcular pérdida de entropía cruzada (-log P(contexto|objetivo))
+            loss_acumulada -= np.log(y_pred[idx_ctx] + 1e-10)
+
+            # 3. Backpropagation (Gradientes de error)
+            error = y_pred.copy()
+            error[idx_ctx] -= 1.0  # e = y_pred - y_real
+
+            # Gradiente de pesos de salida (W_out)
+            dW_out = np.outer(h, error)
+
+            # Gradiente de pesos de entrada (W_in[idx_obj])
+            dh = np.dot(W_out, error)
+
+            # 4. Actualización de parámetros usando el Learning Rate (lr)
+            W_out -= lr * dW_out
+            W_in[idx_obj] -= lr * dh
+
+        # Pérdida promedio de la época
+        loss_promedio = loss_acumulada / len(parejas_idx) if parejas_idx else 0.0
+
+        # Imprimir progreso del entrenamiento
+        if epoch == 1 or epoch == epochs or epoch % 50 == 0:
+            print(f"    Época {epoch:3d}/{epochs} | Pérdida Promedio: {loss_promedio:.6f}")
+
+    print("\n  ¡Entrenamiento Skip-Gram completado!")
+    # Los vectores de entrada W_in representan nuestros embeddings finales densos
+    embeddings = W_in
     return embeddings
 
 def guardar_resultados(tokens, vocabulario, parejas, muestra_oh, embeddings, ventana):
@@ -179,9 +235,11 @@ def guardar_resultados(tokens, vocabulario, parejas, muestra_oh, embeddings, ven
     # configuracion_modelo.json (Metadatos de la corrida)
     config_dict = {
         "hiperparametros": {
-            "metodo": "PPMI + SVD",
+            "metodo": "Skip-Gram (Red Neuronal NumPy desde cero)",
             "ventana_contexto": ventana,
             "dimensiones_svd": config.DIMENSIONES,
+            "learning_rate": config.LEARNING_RATE,
+            "epochs": config.EPOCHS,
             "frecuencia_minima": config.MIN_FRECUENCIA,
             "archivo_stopwords": "stopwords-es.txt",
             "total_stopwords_cargadas": len(text_processor.STOPWORDS)

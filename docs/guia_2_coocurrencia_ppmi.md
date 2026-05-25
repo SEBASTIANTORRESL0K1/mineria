@@ -1,64 +1,76 @@
-# Guía de Estudio 2: Coocurrencia, PPMI y SVD (Matemáticas del Modelo)
+# Guía de Estudio 2: El Algoritmo Neuronal Skip-Gram (Matemáticas del Modelo)
 
-En esta guía abordaremos el núcleo matemático y de procesamiento conceptual del modelo que se ejecuta en **`embeddings_model.py`**. Veremos cómo pasamos de una secuencia lineal de palabras limpias a una representación de coordenadas densas (embeddings).
+En esta guía abordaremos el núcleo matemático y el modelado neuronal de **Skip-Gram (Word2Vec)** que se ejecuta en **`embeddings_model.py`**. Veremos cómo pasamos de parejas de palabras a una representación de coordenadas densas (embeddings) optimizada mediante descenso de gradiente.
 
 ---
 
-## 1. La Ventana de Contexto Dinámica y sus Límites
+## 1. La Ventana de Contexto Dinámica y sus Parejas
 
 Para aprender qué palabras se relacionan, el sistema recorre los tokens y define una "ventana de contexto" (p. ej. `VENTANA = 2`).
 
 ### Cómo funciona matemáticamente:
-Para cada palabra objetivo en la posición $i$, se evalúan sus vecinos desde $i - \text{ventana}$ hasta $i + \text{ventana}$.
+Para cada palabra objetivo en la posición $i$, se evalúan sus vecinos desde $i - \text{ventana}$ hasta $i + \text{ventana}$ (excluyendo la posición $i$ misma). Con esto se forman las parejas de entrenamiento:
+$$\text{Pareja} = (\text{Palabra Objetivo}, \text{Palabra Contexto})$$
 
 ### Tratamiento de Límites (Fronteras):
-Si la palabra objetivo es la primera palabra del texto ($i=0$), no tiene palabras previas. Si es la última, no tiene posteriores. Para que el programa no falle intentando leer índices que no existen en la lista, usamos límites lógicos dinámicos:
+Si la palabra objetivo está al principio del texto ($i=0$), no tiene palabras previas. Si está al final, no tiene posteriores. Usamos límites lógicos dinámicos para evitar desbordar los índices del texto:
 ```python
 inicio = max(0, i - ventana)
 fin    = min(len(tokens), i + ventana + 1)
 ```
-* **`max(0, i - ventana)`**: Garantiza que si `i - ventana` da un número negativo (fuera del rango izquierdo), el inicio se acote a `0` (el inicio del texto).
+* **`max(0, i - ventana)`**: Garantiza que si `i - ventana` da un número negativo, el inicio se acote a `0` (el inicio del texto).
 * **`min(len(tokens), i + ventana + 1)`**: Garantiza que la ventana no intente leer más allá de la última palabra del texto, previniendo errores de desbordamiento.
 
 ---
 
-## 2. La Matriz de Coocurrencia
+## 2. La Arquitectura de la Red Neuronal
 
-La matriz de coocurrencia $M$ es una cuadrícula de tamaño $V \times V$ (donde $V$ es el tamaño de nuestro vocabulario único).
-* Cada fila y columna representa una palabra única.
-* La celda $M_{i,j}$ almacena el conteo acumulativo de veces que la palabra de columna $j$ aparece dentro de la ventana de contexto de la palabra de fila $i$.
+A diferencia de PPMI y SVD, Skip-Gram utiliza un enfoque de **aprendizaje de red neuronal superficial**. La red consta de dos conjuntos de pesos sinápticos principales:
 
-Si dos palabras aparecen juntas muy seguido en el texto, el valor de su celda será muy alto.
-
----
-
-## 3. PPMI (Positive Pointwise Mutual Information)
-
-Aunque ya filtramos stopwords, palabras que son comunes por naturaleza en el idioma (como *"hacer"*, *"decir"*) van a tener conteos de coocurrencia inflados. Para solucionar esto, aplicamos **PMI** (Información Mutua Puntual).
-
-### La Fórmula de PMI:
-$$\text{PMI}(w, c) = \log_2 \left( \frac{P(w, c)}{P(w)P(c)} \right)$$
-
-* **¿Qué significa?** Divide la probabilidad de que la palabra $w$ y su contexto $c$ aparezcan juntos ($P(w,c)$) entre la probabilidad individual de que ocurran por separado ($P(w) \cdot P(c)$). 
-* Si aparecen juntos mucho más de lo que ocurriría por puro azar, el valor de PMI es **positivo**. Si aparecen menos de lo esperado, es **negativo**.
-
-### Por qué usamos PPMI (Positive PMI):
-Cuando dos palabras nunca han aparecido juntas en el texto, la probabilidad conjunta es $0$, lo que haría que $\log_2(0)$ tienda a $-\infty$ (un error matemático). Además, las relaciones menores al azar no nos interesan. Por eso, aplicamos una función "puerta" que reemplaza cualquier valor negativo o infinito por cero:
-
-$$\text{PPMI}(w, c) = \max(0, \text{PMI}(w, c))$$
-
-Esto limpia la matriz y resalta únicamente las asociaciones semánticas fuertes.
+1. **Matriz de Entrada ($W_{\text{in}}$) de tamaño $V \times d$**:
+   * Cada fila de esta matriz representa el **embedding de la palabra objetivo** (su representación semántica densa de $d=50$ dimensiones).
+2. **Matriz de Salida ($W_{\text{out}}$) de tamaño $d \times V$**:
+   * Cada columna de esta matriz representa el **vector de contexto** de una palabra.
 
 ---
 
-## 4. SVD (Singular Value Decomposition)
+## 3. Propagación Hacia Adelante (Forward Pass) y Softmax
 
-La matriz PPMI es gigante ($V \times V$) y extremadamente "dispersa" (llena de ceros). Procesar búsquedas en ella es ineficiente y contiene mucho ruido estadístico.
+Dada una palabra objetivo con índice $i$ en nuestro vocabulario:
 
-Para resolverlo, aplicamos **SVD**, un método matemático de álgebra lineal que descompone nuestra matriz original en tres matrices:
-$$\text{PPMI} \approx U \cdot \Sigma \cdot V^T$$
+1. **Capa Oculta ($h$):** Se selecciona directamente el vector correspondiente en la matriz de pesos de entrada:
+   $$h = W_{\text{in}}[i, :] \quad (\text{vector de tamaño } d)$$
+2. **Logits de Salida ($z$):** Se calcula el producto punto entre la representación oculta y todas las columnas de la matriz de salida:
+   $$z = h \cdot W_{\text{out}} \quad (\text{vector de tamaño } V)$$
+3. **Distribución de Probabilidad ($\hat{y}$):** Se aplica la función de activación **Softmax** para convertir los logits en probabilidades continuas normalizadas que suman 1. Para evitar que números muy grandes causen inestabilidad numérica, restamos el valor máximo de $z$ antes de calcular los exponenciales:
+   $$\hat{y}_k = \text{softmax}(z)_k = \frac{e^{z_k - \max(z)}}{\sum_{m=1}^V e^{z_m - \max(z)}}$$
 
-* **Reducción de Dimensionalidad:** Nos quedamos únicamente con las primeras **50 dimensiones** (`DIMENSIONES = 50`) de estas matrices descompuestas, las cuales concentran la mayor cantidad de información y patrones conceptuales del texto.
-* **El Producto Final (Embeddings):** Multiplicamos la matriz izquierda singular truncada por los valores singulares:
-  $$\text{Embeddings} = U_{:, :50} \cdot \Sigma_{:50, :50}$$
-  Esto nos da una matriz densa donde cada fila es una coordenada de 50 números reales que representa la esencia semántica comprimida de cada palabra.
+---
+
+## 4. Función de Pérdida (Entropía Cruzada)
+
+El objetivo de la red es maximizar la probabilidad de predecir la palabra de contexto real (con índice $j$) dada la palabra objetivo. Esto equivale a minimizar la pérdida de **Entropía Cruzada**:
+$$L = -\log P(w_{\text{contexto}} | w_{\text{objetivo}}) = -\log \hat{y}_j$$
+
+---
+
+## 5. Retropropagación del Error (Backpropagation) y SGD
+
+El modelo ajusta sus pesos mediante **Gradiente Descendiente Estocástico (SGD)**. Para cada pareja de entrenamiento:
+
+1. **Gradiente del Error de Salida ($e$):**
+   $$e = \hat{y} - y$$
+   Donde $y$ es un vector *one-hot* de tamaño $V$ con un 1 en la posición de la palabra de contexto real $j$. Por lo tanto:
+   * Para la palabra de contexto real: $e_j = \hat{y}_j - 1$
+   * Para el resto de palabras: $e_k = \hat{y}_k$
+2. **Gradiente de Pesos de Salida ($dW_{\text{out}}$):**
+   $$dW_{\text{out}} = h^T \cdot e \quad (\text{producto exterior, de tamaño } d \times V)$$
+3. **Gradiente de la Representación Oculta ($dh$):**
+   $$dh = W_{\text{out}} \cdot e \quad (\text{de tamaño } d)$$
+4. **Regla de Actualización de Pesos (con Learning Rate $\eta = 0.05$):**
+   * Ajustamos los pesos de contexto de todas las palabras:
+     $$W_{\text{out}} \leftarrow W_{\text{out}} - \eta \cdot dW_{\text{out}}$$
+   * Ajustamos únicamente el embedding de la palabra objetivo activa:
+     $$W_{\text{in}}[i, :] \leftarrow W_{\text{in}}[i, :] - \eta \cdot dh$$
+
+Al repetir este ciclo de aprendizaje iterativo a lo largo de las épocas, la red neuronal "empuja" los vectores de palabras que aparecen en contextos similares a direcciones cercanas del espacio multidimensional.

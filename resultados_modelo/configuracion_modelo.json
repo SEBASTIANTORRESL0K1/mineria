@@ -1,8 +1,10 @@
 {
   "hiperparametros": {
-    "metodo": "PPMI + SVD",
+    "metodo": "Skip-Gram (Red Neuronal NumPy desde cero)",
     "ventana_contexto": 2,
     "dimensiones_svd": 50,
+    "learning_rate": 0.05,
+    "epochs": 500,
     "frecuencia_minima": 1,
     "archivo_stopwords": "stopwords-es.txt",
     "total_stopwords_cargadas": 655
