@@ -1,18 +1,18 @@
 {
   "hiperparametros": {
     "metodo": "PPMI + SVD",
-    "ventana_contexto": 3,
+    "ventana_contexto": 2,
     "dimensiones_svd": 50,
     "frecuencia_minima": 1,
     "archivo_stopwords": "stopwords-es.txt",
     "total_stopwords_cargadas": 655
   },
   "estadisticas": {
-    "total_tokens": 953,
-    "tamano_vocabulario": 469,
-    "total_parejas": 5706,
+    "total_tokens": 101,
+    "tamano_vocabulario": 80,
+    "total_parejas": 398,
     "forma_embeddings": [
-      469,
+      80,
       50
     ]
   },
