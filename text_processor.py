@@ -95,14 +95,40 @@ def normalizar_texto(texto):
     return tokens_finales
 
 def leer_archivo(ruta):
-    """Lee y carga el contenido de un archivo de texto en formato UTF-8."""
+    """Lee y carga el contenido de un archivo de texto en formato UTF-8 con manejo de errores robusto."""
     ruta = Path(ruta.strip().strip('"').strip("'"))
     if not ruta.exists():
         utils.err(f"No se encontró el archivo en la ruta especificada: {ruta}")
         return None
-    with open(ruta, "r", encoding="utf-8") as f:
-        contenido = f.read()
     
+    # Detección preventiva de archivos PDF
+    if ruta.suffix.lower() == ".pdf":
+        utils.err("El archivo ingresado es un PDF (.pdf). Este sistema solo procesa texto plano (.txt).")
+        utils.err("Por favor, guarda el contenido de tu PDF como un archivo .txt o usa un archivo .txt válido.")
+        return None
+
+    contenido = None
+    try:
+        # Intentar leer en UTF-8 estándar
+        with open(ruta, "r", encoding="utf-8") as f:
+            contenido = f.read()
+    except UnicodeDecodeError:
+        try:
+            # Fallback en Windows: a veces los txt se guardan en formato ANSI / Latin-1
+            with open(ruta, "r", encoding="latin-1") as f:
+                contenido = f.read()
+            utils.err("El archivo no está codificado en UTF-8 estándar. Se cargó con codificación de respaldo (Latin-1).")
+        except Exception:
+            utils.err("Error de decodificación: El archivo no parece ser un texto plano válido.")
+            utils.err("Asegúrate de que sea un archivo de texto (.txt) y no un binario (como .pdf, .docx, .zip, etc.).")
+            return None
+    except Exception as e:
+        utils.err(f"Ocurrió un error inesperado al leer el archivo: {e}")
+        return None
+
+    if contenido is None:
+        return None
+
     caracteres = len(contenido)
     palabras = len(contenido.split())
     utils.ok(f"Archivo leído exitosamente: {ruta.name}")
